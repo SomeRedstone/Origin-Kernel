@@ -1,0 +1,94 @@
+name: Build Tetris Kernel
+
+# Recipe mirrors the dev's own Galaxian workflow (samakshkambxj)
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_ref:
+        description: "Kernel source branch, tag, or commit"
+        default: "ksun-341"
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Free disk space
+        uses: endersonmenezes/free-disk-space@v3
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_swap: true
+
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.kernel_ref }}
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache clang flex git libelf-dev libssl-dev lld llvm pahole python3 rsync unzip wget zip
+
+      - name: Show build information
+        run: |
+          echo "Kernel source ref : ${{ inputs.kernel_ref }}"
+          echo "Repository        : ${{ github.repository }}"
+          git log -1 --oneline
+          make kernelversion
+          echo "--- KSU submodule ---"
+          git submodule status KernelSU-Next
+          git -C KernelSU-Next log -1 --oneline
+          grep -n "KSU_VERSION" KernelSU-Next/kernel/Kbuild | head -5
+
+      - name: Configure kernel
+        run: |
+          make O=out ARCH=arm64 gki_defconfig
+          ./scripts/config --file out/.config \
+            -e KSU -e KSU_SUSFS -e BBG -e TMPFS_XATTR -e TMPFS_POSIX_ACL
+          make O=out ARCH=arm64 olddefconfig
+
+      - name: Verify KSU/SUSFS/BBG enabled
+        run: |
+          grep -E '^CONFIG_KSU=y$' out/.config
+          grep -E '^CONFIG_KSU_SUSFS=y$' out/.config
+          grep -E '^CONFIG_BBG=y$' out/.config
+          grep -E '^CONFIG_LSM=.*baseband_guard' out/.config
+
+      - name: Build kernel
+        run: |
+          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 \
+            -Wno-error=uninitialized -Wno-error=sometimes-uninitialized \
+            -Wno-error=attribute-warning -Wno-frame-larger-than -j"$(nproc)"
+
+      - name: Package artifacts
+        run: |
+          rm -rf artifacts && mkdir -p artifacts artifacts/modules
+          cp out/arch/arm64/boot/Image artifacts/
+          if [ -f out/arch/arm64/boot/Image.gz ]; then cp out/arch/arm64/boot/Image.gz artifacts/; fi
+          if [ -f out/arch/arm64/boot/Image.lz4 ]; then cp out/arch/arm64/boot/Image.lz4 artifacts/; fi
+          find out/arch/arm64/boot -name '*.dtb' -o -name '*.dtbo' | while read -r f; do cp "$f" artifacts/; done
+          find out -name '*.ko' | head -100 | while read -r f; do cp "$f" artifacts/modules/; done
+          {
+            echo "Repository: ${{ github.repository }}"
+            echo "Source ref: ${{ inputs.kernel_ref }}"
+            echo "Commit: $(git rev-parse HEAD)"
+            echo "Version: $(make kernelversion)"
+            echo "KSU: $(git -C KernelSU-Next rev-parse HEAD) ($(grep -o 'KSU_VERSION := .*' KernelSU-Next/kernel/Kbuild | head -1))"
+            echo "Date: $(date -u)"
+          } > artifacts/build-info.txt
+          ls -lah artifacts/
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-build-tetris
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
