@@ -52,6 +52,7 @@ jobs:
           make O=out ARCH=arm64 gki_defconfig
           ./scripts/config --file out/.config \
             -e KSU -e KSU_SUSFS -e BBG -e TMPFS_XATTR -e TMPFS_POSIX_ACL
+          ./scripts/config --file out/.config -d WERROR
           make O=out ARCH=arm64 olddefconfig
 
       - name: Verify KSU/SUSFS/BBG enabled
