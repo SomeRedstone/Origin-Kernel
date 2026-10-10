@@ -1,9 +1,6 @@
-[submodule "Baseband-Guard"]
-	path = Baseband-Guard
-	url = https://github.com/vc-teahouse/Baseband-guard.git
 [submodule "KernelSU-Next"]
 	path = KernelSU-Next
-	url = https://github.com/samakshkambxj/KernelSU-Next
+	url = https://github.com/SomeRedstone/KernelSU-Next.git
 [submodule "susfs4ksu"]
 	path = susfs4ksu
 	url = https://gitlab.com/pershoot/susfs4ksu/
