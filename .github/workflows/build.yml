@@ -63,10 +63,21 @@ jobs:
           grep -E '^CONFIG_LSM=.*baseband_guard' out/.config
 
       - name: Build kernel
+        env:
+          KSU_NEXT_MANAGER_LIST: "0x3e6:79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7,0x338:f26471a28031130362bce7eebffb9a0b8afc3095f163ce0c75a309f03b644a1f,0x390:5e93730d4947afd3b216d0bbf18edcf8328e0e0d6a7869e54bb09757398d7049"
         run: |
+          set -o pipefail
           make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 \
             -Wno-error=uninitialized -Wno-error=sometimes-uninitialized \
-            -Wno-error=attribute-warning -Wno-frame-larger-than -j"$(nproc)"
+            -Wno-error=attribute-warning -Wno-frame-larger-than -j"$(nproc)" 2>&1 | tee build.log
+
+      - name: Verify manager allowlist and version
+        run: |
+          grep "KernelSU-Next Manager signatures:" build.log
+          grep "KernelSU-Next version:" build.log
+          for sig in "0x3e6:79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7" "0x338:f26471a28031130362bce7eebffb9a0b8afc3095f163ce0c75a309f03b644a1f" "0x390:5e93730d4947afd3b216d0bbf18edcf8328e0e0d6a7869e54bb09757398d7049"; do
+            grep -q "$sig" build.log || { echo "::error::Manager signature $sig missing from build log"; exit 1; }
+          done
 
       - name: Package artifacts
         run: |
