@@ -51,9 +51,9 @@ jobs:
         run: |
           make O=out ARCH=arm64 gki_defconfig
           ./scripts/config --file out/.config \
-            -e KSU -e KSU_SUSFS -e BBG -e TMPFS_XATTR -e TMPFS_POSIX_ACL \
-            -e ARCH_MEDIATEK -e SCSI_UFS_MEDIATEK -e PHY_MTK_UFS
+            -e KSU -e KSU_SUSFS -e BBG -e TMPFS_XATTR -e TMPFS_POSIX_ACL
           ./scripts/config --file out/.config -d WERROR
+          ./scripts/config --file out/.config --set-str CONFIG_LOCALVERSION "-Origin"
           make O=out ARCH=arm64 olddefconfig
 
       - name: Verify KSU/SUSFS/BBG enabled
@@ -62,9 +62,8 @@ jobs:
           grep -E '^CONFIG_KSU_SUSFS=y$' out/.config
           grep -E '^CONFIG_BBG=y$' out/.config
           grep -E '^CONFIG_LSM=.*baseband_guard' out/.config
-          grep -E '^CONFIG_ARCH_MEDIATEK=y$' out/.config
-          grep -E '^CONFIG_SCSI_UFS_MEDIATEK=y$' out/.config
-          grep -E '^CONFIG_PHY_MTK_UFS=y$' out/.config
+          grep -E '^CONFIG_LOCALVERSION="-Origin"$' out/.config
+          grep -E '^CONFIG_SCSI_UFSHCD_PLATFORM=y$' out/.config
 
       - name: Build kernel
         env:
